@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 和电脑版托盘图标一样：蓝底白色喇叭 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#0078D4"
+        android:pathData="M54,6a48,48 0,1 0,0.01 0z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M30,44h12l16,-14v48l-16,-14h-12z" />
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="5"
+        android:strokeLineCap="round"
+        android:pathData="M66,42a14,14 0,0 1,0 24" />
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="5"
+        android:strokeLineCap="round"
+        android:pathData="M74,34a25,25 0,0 1,0 40" />
+</vector>

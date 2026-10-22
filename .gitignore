@@ -1,0 +1,22 @@
+# 词典数据：体积大（单个文件超过 GitHub 的 100 MB 上限），用脚本重新生成
+#   电脑版：desktop/build_dict.py   安卓版：android/tools/make_assets.py
+desktop/dict/
+android/app/src/main/assets/dict/
+
+# 电脑版：Python 环境和打包输出
+desktop/.venv/
+desktop/build/
+desktop/dist/
+desktop/EdgeSpeak.spec
+desktop/edgespeak.ico
+__pycache__/
+
+# 安卓版：构建输出和本机路径
+android/.gradle/
+android/.kotlin/
+android/build/
+android/app/build/
+android/local.properties
+
+*.apk
+*.exe

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">EdgeSpeak</string>
+    <string name="menu_lookup">EdgeSpeak 查词</string>
+    <string name="menu_speak">EdgeSpeak 朗读</string>
+    <string name="accessibility_label">EdgeSpeak 悬浮取词</string>
+    <string name="accessibility_description">显示一个悬浮按钮：点它，再点屏幕上的日语，就弹出查词卡片。用来读取你点到的那段文字；读不到时（游戏、图片、漫画）截取屏幕识别文字。文字只在本机处理，只有你开了 AI 解释时，才会把那一句发给你选的 AI 服务。</string>
+</resources>

@@ -1,0 +1,7 @@
+* text=auto
+# Unix 脚本保持 LF，Windows 批处理保持 CRLF
+android/gradlew text eol=lf
+*.cmd text eol=crlf
+*.bat text eol=crlf
+*.jar binary
+*.ico binary
