@@ -23,6 +23,7 @@ private const val SYSTEM_PROMPT = """你是日语老师，帮中文母语的学�
 
 private const val EN_SYSTEM_PROMPT = """你是英语老师，学习者是中文母语者，正在用日英词典查日语词。
 用户会给出：日语词、它的一条英文释义、释义里看不懂的一个英文单词。
+以英式英语为准：这个单词有英美差异时（拼写、用词），顺带注明英式的说法。
 只按下面两行的格式用简体中文回答，不要寒暄，不要用 Markdown：
 意思：这个英文单词在这条释义里的意思，一两句话
 整条：整条英文释义的中文翻译"""
@@ -30,6 +31,7 @@ private const val EN_SYSTEM_PROMPT = """你是英语老师，学习者是中文�
 private const val EN_CONTEXT_PROMPT = """你是英语老师，帮中文母语的学习者理解句子里的一个英文单词。
 用户会给出：句子（目标词用【】标出）、词典里的原形和中文释义。
 句子里可能有网络用语、俚语、缩写或专有名词，按它在这句话里的实际用法解释。
+以英式英语为准：这个词在拼写、用词或发音上有英美差异时，在「意思」里顺带注明英式的说法。
 只按下面两行的格式用简体中文回答，不要寒暄，不要用 Markdown：
 意思：先写这个词在这里对应的中文词义（几个字），再用一句话说明它在这句话里指什么。例如「出现、发生（came up 是固定搭配）。这里指工作上突然有事」
 翻译：整句的中文翻译"""
@@ -65,7 +67,8 @@ fun enContextRequest(hit: EnglishHit): AiRequest {
     val e = hit.entry
     val base = if (e != null) e.word + (if (e.via.isNotEmpty()) "（${e.via}）" else "") else "（离线词典里没有这个词）"
     val meanings = e?.lines?.takeIf { it.isNotEmpty() }?.joinToString("\n") { "- $it" } ?: "（无）"
-    return AiRequest(EN_CONTEXT_PROMPT, "句子：$marked\n目标词：${hit.surface}\n词典原形：$base\n词典释义：\n$meanings")
+    val uk = if (e != null && e.ukNotes.isNotEmpty()) "\n英美差异：${e.ukNotes.joinToString("；")}" else ""
+    return AiRequest(EN_CONTEXT_PROMPT, "句子：$marked\n目标词：${hit.surface}\n词典原形：$base\n词典释义：\n$meanings$uk")
 }
 
 /** 去掉正文里的 <think>…</think>；思考还没结束（只有开头标签）时，后面的都不算正文。 */

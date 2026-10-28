@@ -14,7 +14,7 @@ if not exist dict\manifest.json (
 .venv\Scripts\pyinstaller.exe --noconfirm --onedir --noconsole --name EdgeSpeak --icon edgespeak.ico ^
     --hidden-import pystray._win32 --hidden-import _cffi_backend ^
     --collect-all opencc --collect-all fugashi --collect-all unidic_lite ^
-    --collect-submodules comtypes.gen --collect-all winrt --collect-all cohere ^
+    --collect-submodules comtypes.gen --collect-all winrt --collect-all cohere --add-data "uk_english.json;." ^
     edge_speak.py || exit /b 1
 robocopy dict dist\EdgeSpeak\dict /MIR /XD tmp-* /NFL /NDL /NJH /NP
 if errorlevel 8 exit /b 1

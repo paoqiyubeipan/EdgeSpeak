@@ -1,7 +1,8 @@
 # 词典数据：体积大（单个文件超过 GitHub 的 100 MB 上限），用脚本重新生成
-#   电脑版：desktop/build_dict.py   安卓版：android/tools/make_assets.py
+#   电脑版：desktop/build_dict.py   安卓版：android/tools/make_assets.py（uk_english.json 从 desktop/ 复制过去）
 desktop/dict/
 android/app/src/main/assets/dict/
+android/app/src/main/assets/uk_english.json
 
 # 电脑版：Python 环境和打包输出
 desktop/.venv/

@@ -4,7 +4,7 @@
 
 ## 安装
 
-把 `EdgeSpeak-Android-1.1.0.apk` 传到手机上打开安装（需要允许「安装未知应用」）。要求 Android 11 及以上。
+把 `EdgeSpeak-Android-1.2.0.apk` 传到手机上打开安装（需要允许「安装未知应用」）。要求 Android 11 及以上。
 
 第一次打开时会把词典解压到手机里（约 370 MB，几秒到十几秒）。
 
@@ -13,6 +13,8 @@
 1. **选字菜单**：在任何 App 里长按选中文字，弹出的菜单里点 **EdgeSpeak 查词** 或 **EdgeSpeak 朗读**（有的 App 要先点菜单里的 ⋮）。
    - 查词：在原来的 App 上面弹出卡片。上面是选中的整段文字，点里面的任意字就换成那个词；点标题朗读；点英文释义里的单词，下面显示它的中文意思。
    - 选中的（或点到的）是英文单词时，显示英文卡片：音标、中文释义、考试标签和变形，AI 结合句子解释它在这里的意思并翻译整句。选中整段英文时先查第一个单词，点句子里的其他单词换词查。设置里可以关掉「英文单词也查」。
+   - 英文**以英式英语为准**（和电脑版一样）：查美式拼写时标题显示英式写法，下面绿字注明「美式拼写 color」（color → colour、center → centre、organize → organise……约 1700 对，变形也换成英式：coloured、organising）；直接查英式拼写得到同一张卡片。只在部分义项上不同的（tire 指轮胎时写 tyre、program 指节目时写 programme）不改标题，只加说明；常见的用词差异也会注明（elevator → 英式说 lift、apartment → 英式常说 flat）。音标本来就是英式的，朗读用英式英语语音（系统朗读引擎没有时用美式）。
+   - 有的变形词本身也是个词（tired 疲倦的、left 左边的），卡片会同时写出「是 tire 的过去式」和它自己的意思，AI 按句子判断。
    - 朗读：直接读出来，不显示界面（和电脑版的 Ctrl+Alt+Q 一样）。
 2. **悬浮取词**：在 EdgeSpeak 设置里点「打开辅助功能设置」，打开「EdgeSpeak 悬浮取词」。屏幕边上会出现蓝色悬浮按钮（可以拖动）：点它，再点屏幕上的日语或英文单词。
    - 先读界面上的文字（浏览器、大部分 App），文字取自原文；读不到时（游戏、图片、漫画）截屏用 ML Kit 日语 OCR 识别（也认英文，单词之间按位置补上空格），都在手机上完成。
@@ -53,4 +55,4 @@ Sudachi 词典从 https://sudachi.s3-ap-northeast-1.amazonaws.com/sudachidict/ �
 
 ## 数据来源与许可
 
-JMdict（EDRDG，CC BY-SA 4.0）、Kanjium 音高（CC BY-SA 4.0）、维基词典英文版和中文版（CC BY-SA 4.0，经 kaikki.org 提取）、ECDICT（MIT）、Sudachi 和 SudachiDict（Apache 2.0）、ML Kit 文字识别（Google）。
+JMdict（EDRDG，CC BY-SA 4.0）、Kanjium 音高（CC BY-SA 4.0）、维基词典英文版和中文版（CC BY-SA 4.0，经 kaikki.org 提取）、ECDICT（MIT）、英美拼写对照（tysto.com，经 hyperreality/American-British-English-Translator 整理，MIT）、Sudachi 和 SudachiDict（Apache 2.0）、ML Kit 文字识别（Google）。

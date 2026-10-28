@@ -551,9 +551,18 @@ class EnglishCard(context: Context) : CardBase(context) {
         headerBottom = y
         if (e != null && e.via.isNotEmpty()) {
             val via = paint(12.5f, MUTED)
+            val viaLines = wrapChars(via, e.via, width - pad * 2)
             val viaY = y
-            ops += { c -> c.drawText(e.via, pad, baseline(via, viaY), via) }
-            y += dp(20f)
+            ops += { c -> viaLines.forEachIndexed { k, l -> c.drawText(l, pad, baseline(via, viaY + k * dp(18f)), via) } }
+            y += dp(18f) * viaLines.size + dp(2f)
+        }
+        // 英美差异（以英式为准）：美式拼写 color、英式说 lift……
+        if (e != null && e.ukNotes.isNotEmpty()) {
+            val ukPaint = paint(12.5f, ZH_ACCENT)
+            val ukLines = e.ukNotes.flatMap { wrapChars(ukPaint, it, width - pad * 2) }
+            val ukY = y
+            ops += { c -> ukLines.forEachIndexed { k, l -> c.drawText(l, pad, baseline(ukPaint, ukY + k * dp(18f)), ukPaint) } }
+            y += dp(18f) * ukLines.size + dp(2f)
         }
         y += dp(6f)
         val sep = y

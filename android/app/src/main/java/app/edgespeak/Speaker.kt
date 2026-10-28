@@ -27,7 +27,7 @@ class Speaker(context: Context) {
         val locale = when (lang ?: detectLanguage(clean)) {
             "ja" -> Locale.JAPANESE
             "zh" -> Locale.SIMPLIFIED_CHINESE
-            else -> Locale.US
+            else -> english()
         }
         if (tts.setLanguage(locale) < TextToSpeech.LANG_AVAILABLE) Log.w("EdgeSpeak", "朗读引擎没有 $locale 的语音")
         tts.speak(clean, TextToSpeech.QUEUE_FLUSH, null, "edgespeak")
@@ -36,7 +36,11 @@ class Speaker(context: Context) {
     fun stop() = tts.stop()
 
     fun hasVoice(lang: String): Boolean = ready && tts.isLanguageAvailable(
-        if (lang == "ja") Locale.JAPANESE else if (lang == "zh") Locale.SIMPLIFIED_CHINESE else Locale.US) >= TextToSpeech.LANG_AVAILABLE
+        if (lang == "ja") Locale.JAPANESE else if (lang == "zh") Locale.SIMPLIFIED_CHINESE else english()) >= TextToSpeech.LANG_AVAILABLE
+
+    /** 英文以英式为准：引擎没有英式语音时用美式。 */
+    private fun english(): Locale =
+        if (tts.isLanguageAvailable(Locale.UK) >= TextToSpeech.LANG_AVAILABLE) Locale.UK else Locale.US
 
     companion object {
         // 中文特有、日语里不用的字：出现就按中文读

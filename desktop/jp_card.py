@@ -516,11 +516,25 @@ class EnglishCard(Card):
 
         if e and e.via:
             via_y = y
+            via_lines = wrap_chars(zh(px(12)), e.via, px(WIDTH - PAD * 2))
 
             def draw_via(d, oy):
-                d.text((px(PAD), oy + px(via_y)), e.via, font=zh(px(12)), fill=MUTED)
+                for k, line in enumerate(via_lines):
+                    d.text((px(PAD), oy + px(via_y + 18 * k)), line, font=zh(px(12)), fill=MUTED)
             ops.append(draw_via)
-            y += 20
+            y += 18 * len(via_lines) + 2
+
+        # 英美差异（以英式为准）：美式拼写 color、英式说 lift……
+        uk_lines = [line for note in (e.uk_notes if e else [])
+                    for line in wrap_chars(zh(px(12)), note, px(WIDTH - PAD * 2))]
+        if uk_lines:
+            uk_y = y
+
+            def draw_uk(d, oy):
+                for k, line in enumerate(uk_lines):
+                    d.text((px(PAD), oy + px(uk_y + 18 * k)), line, font=zh(px(12)), fill=ZH_ACCENT)
+            ops.append(draw_uk)
+            y += 18 * len(uk_lines) + 2
 
         y += 6
         sep_y = y

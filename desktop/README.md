@@ -11,8 +11,8 @@
 
 | 安装包 | 大小 | 词典 |
 |---|---|---|
-| `EdgeSpeak-Setup-1.1.0.exe`（完整版） | 约 520 MB | 已带上，装完不联网也能完整使用 |
-| `EdgeSpeak-Setup-1.1.0-lite.exe`（精简版） | 约 56 MB | 第一次启动后在后台下载（约 1.4 GB），日英词典一到就能查词，其余陆续到位；朗读不受影响。进度：把鼠标停在托盘图标上，或右键 →「词典」。下载失败（断网、安全软件拦截）时 10 分钟后自动重试 |
+| `EdgeSpeak-Setup-1.2.0.exe`（完整版） | 约 520 MB | 已带上，装完不联网也能完整使用 |
+| `EdgeSpeak-Setup-1.2.0-lite.exe`（精简版） | 约 56 MB | 第一次启动后在后台下载（约 1.4 GB），日英词典一到就能查词，其余陆续到位；朗读不受影响。进度：把鼠标停在托盘图标上，或右键 →「词典」。下载失败（断网、安全软件拦截）时 10 分钟后自动重试 |
 
 运行安装包：
 - 装到 `%LOCALAPPDATA%\Programs\EdgeSpeak`，**不需要管理员权限**；开始菜单里有 EdgeSpeak 和卸载快捷方式，可选桌面快捷方式和开机自动启动。
@@ -50,6 +50,8 @@
 
 **英文单词**：光标下不是日语、而是英文单词时（英文网页、文档，或日语里夹的「PC」「OK」），弹出英文卡片，查的是 ECDICT 完整版：
 - 变形词还原到原词并注明（running 是 run 的现在分词、RUNS → run）；连字符词先查整体（well-known、state-of-the-art），查不到再查光标所在的那一段；John's 这类先查整体再去掉 's。全角英文（ＰＣ）也能查。
+- **以英式英语为准**：查美式拼写时标题显示英式写法，下面绿字注明「美式拼写 color」（color → colour、center → centre、organize → organise、traveler → traveller……约 1700 对，由 `build_uk_english.py` 从 tysto 对照表筛出常规差异并去掉古旧写法（waggon、gaol、mediaeval 之类），变形也跟着换成英式：coloured、organising）；直接查英式拼写得到同一张卡片。只在部分义项上不同的（tire 指轮胎时写 tyre、program 指节目时写 programme、meter 指长度单位时写 metre……）不改标题，只加说明。常见的英美用词差异也会注明（elevator → 英式说 lift、apartment → 英式常说 flat、pants → 英式说 trousers）。音标本来就是英式的（ECDICT 以英音为主），默认英文音色是英式的 Sonia。
+- 有的变形词本身也是个词（tired 疲倦的、left 左边的、rose 玫瑰），卡片会同时写出「是 tire 的过去式」和它自己的意思，AI 按句子判断。
 - 词典里没有的普通单词（新词、专有名词）也会弹出卡片，可以让 AI 解释；网址、路径、邮箱、带数字或下划线的代码（example.com、my_var、mp3）和驼峰式标识符（LookupPopup）不弹。
 - AI 区和日语卡片一样会自动请求（同样受 0.6 秒停留和每分钟次数的限制），回答两行：**意思**（这个词在这句话里的意思）和**翻译**（整句中文）。点标题读英文发音。
 - 只想查日语时，在托盘菜单里关掉「英文单词也查」。
@@ -107,7 +109,7 @@
 | 项 | 说明 |
 |---|---|
 | `hotkey` | 快捷键，如 `ctrl+alt+q`、`alt+f1`、`ctrl+shift+e` |
-| `zh_voice` / `en_voice` / `ja_voice` | 任意 Edge 音色名，如 `zh-CN-YunyangNeural`、`ja-JP-KeitaNeural` |
+| `zh_voice` / `en_voice` / `ja_voice` | 任意 Edge 音色名，如 `zh-CN-YunyangNeural`、`ja-JP-KeitaNeural`；英文默认英式的 `en-GB-SoniaNeural` |
 | `kanji_lang` | 只有汉字时按哪种语言读：`ja` 或 `zh` |
 | `hover_lookup` | 是否启用 Shift 悬停查词：`true` / `false` |
 | `hover_english` | 悬停在英文单词上时是否也查：`true` / `false` |
@@ -149,6 +151,7 @@ build.cmd
 - 音高：[Kanjium](https://github.com/mifunetoshiro/kanjium)（CC BY-SA 4.0）
 - [维基词典](https://www.wiktionary.org/)英文版、中文版（CC BY-SA 4.0），经 [kaikki.org / wiktextract](https://kaikki.org/) 提取
 - 英汉词典：[ECDICT](https://github.com/skywind3000/ECDICT) 完整版（MIT）
+- 英美拼写对照：[tysto.com 的对照表](http://www.tysto.com/uk-us-spelling-list.html)，经 [hyperreality/American-British-English-Translator](https://github.com/hyperreality/American-British-English-Translator) 整理（MIT），见 `uk_english.json`
 - 分词：MeCab + [UniDic](https://clrd.ninjal.ac.jp/unidic/) 現代書き言葉（国立国语研究所，BSD 许可）；找不到时退回随程序带的 unidic-lite
 - 繁体 → 日文新字体：[OpenCC](https://github.com/BYVoid/OpenCC)（Apache 2.0）
 - OCR：Windows 自带的 Windows.Media.Ocr，经 [PyWinRT](https://github.com/pywinrt/pywinrt) 调用（MIT）

@@ -7,9 +7,12 @@
   wikt.sqlite     维基词典英文版 + 中文版的日语词条（原样复制）
   ecdict.sqlite   ECDICT 英汉（完整版 300 多 MB，手机上用不着全部）：留下日语释义里会出现的英文单词和它们的原词，
                   再加上普通英文单词（全小写字母、可带撇号和连字符，且有考试标签、变形或音标的，约 47 万条）
-                  和带撇号的词（don't、o'clock），供英文取词用。合计约 53 万条、64 MB
+                  和带撇号的词（don't、o'clock），供英文取词用；uk_english.json 里英美两种拼写的词条也都留下
+                  （英式卡片要比较两边的释义、用英式词条的变形）。合计约 53 万条、64 MB
   system_core.dic Sudachi 分词词典
   manifest.json   每个文件的大小，首次启动时解压用来显示进度
+
+另外把电脑版的 uk_english.json（英式英语：英美拼写对照、用词差异）复制到 app/src/main/assets/，不用解压，直接从 assets 读。
 """
 import json
 import os
@@ -39,7 +42,7 @@ def english_vocabulary(jmdict, wikt):
     return vocab
 
 
-def build_ecdict(src, dst, vocab):
+def build_ecdict(src, dst, vocab, spellings=frozenset()):
     if os.path.exists(dst):
         os.remove(dst)
     out = sqlite3.connect(dst)
@@ -50,7 +53,7 @@ def build_ecdict(src, dst, vocab):
     db = sqlite3.connect(src)
     # 释义里出现的可能是变形（eating），把它的原词（eat）也留下
     lemmas = {lemma for form, lemma in db.execute("SELECT form, lemma FROM en_forms") if form in vocab}
-    keep = vocab | lemmas
+    keep = vocab | lemmas | spellings
 
     def wanted(key, phonetic, tag, exchange):
         """英文取词用：普通英文单词里有考试标签、变形或音标的（没有这些的多半是生僻词、缩写），以及带撇号的词。"""
@@ -63,7 +66,8 @@ def build_ecdict(src, dst, vocab):
     # 变形 → 原词：变形本身是要留的词（释义里出现的，或像普通英文单词的），原词也留下了
     out.executemany("INSERT INTO en_forms VALUES (?, ?)",
                     [(f, l) for f, l in db.execute("SELECT form, lemma FROM en_forms")
-                     if (f in vocab or ENGLISH_KEY.match(f) or "'" in f) and l in kept])
+                     if (f in vocab or ENGLISH_KEY.match(f) or "'" in f or f in spellings or l in spellings)
+                     and l in kept])
     out.commit()
     out.execute("VACUUM")
     out.close()
@@ -71,13 +75,19 @@ def build_ecdict(src, dst, vocab):
 
 
 def main(dict_dir, sudachi_dic):
-    out = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "app", "src", "main", "assets", "dict")
+    here = os.path.dirname(os.path.abspath(__file__))
+    assets = os.path.join(here, "..", "app", "src", "main", "assets")
+    out = os.path.join(assets, "dict")
     os.makedirs(out, exist_ok=True)
+    uk_json = os.path.join(here, "..", "..", "desktop", "uk_english.json")
+    shutil.copyfile(uk_json, os.path.join(assets, "uk_english.json"))
+    spelling = json.load(open(uk_json, encoding="utf-8"))["spelling"]
+    spellings = frozenset(spelling) | frozenset(spelling.values())  # 美式和英式拼写
     jmdict, wikt, ecdict = (newest(dict_dir, n) for n in ("jmdict", "wiktionary", "ecdict"))
     shutil.copyfile(jmdict, os.path.join(out, "jmdict.sqlite"))
     shutil.copyfile(wikt, os.path.join(out, "wikt.sqlite"))
     shutil.copyfile(sudachi_dic, os.path.join(out, "system_core.dic"))
-    n = build_ecdict(ecdict, os.path.join(out, "ecdict.sqlite"), english_vocabulary(jmdict, wikt))
+    n = build_ecdict(ecdict, os.path.join(out, "ecdict.sqlite"), english_vocabulary(jmdict, wikt), spellings)
     files = ["system_core.dic", "jmdict.sqlite", "wikt.sqlite", "ecdict.sqlite"]
     manifest = {"files": {f: os.path.getsize(os.path.join(out, f)) for f in files}}
     json.dump(manifest, open(os.path.join(out, "manifest.json"), "w"), indent=1)

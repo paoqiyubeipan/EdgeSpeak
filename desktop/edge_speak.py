@@ -38,7 +38,7 @@ LOG_PATH = os.path.join(CONFIG_DIR, "log.txt")
 DEFAULT_CONFIG = {
     "hotkey": "ctrl+alt+q",
     "zh_voice": "zh-CN-XiaoxiaoNeural",
-    "en_voice": "en-US-AriaNeural",
+    "en_voice": "en-GB-SoniaNeural",  # 英文以英式为准
     "ja_voice": "ja-JP-NanamiNeural",
     "kanji_lang": "ja",  # 只有汉字没有假名时按哪种语言读：ja / zh
     "hover_lookup": True,  # 按住 Shift 悬停查日语词
@@ -63,12 +63,12 @@ ZH_VOICES = [
     ("云健（男）", "zh-CN-YunjianNeural"),
 ]
 EN_VOICES = [
+    ("Sonia（英式女）", "en-GB-SoniaNeural"),
+    ("Ryan（英式男）", "en-GB-RyanNeural"),
     ("Aria（美式女）", "en-US-AriaNeural"),
     ("Jenny（美式女）", "en-US-JennyNeural"),
     ("Guy（美式男）", "en-US-GuyNeural"),
     ("Andrew（美式男）", "en-US-AndrewNeural"),
-    ("Sonia（英式女）", "en-GB-SoniaNeural"),
-    ("Ryan（英式男）", "en-GB-RyanNeural"),
 ]
 JA_VOICES = [
     ("七海 Nanami（女）", "ja-JP-NanamiNeural"),
@@ -482,7 +482,9 @@ class SapiVoice:
                 self.tokens.setdefault("zh", token)
             elif "411" in lang:
                 self.tokens.setdefault("ja", token)
-            elif "409" in lang or "809" in lang:
+            elif "809" in lang:
+                self.tokens["en"] = token  # 英文以英式为准：有英式语音就用英式的
+            elif "409" in lang:
                 self.tokens.setdefault("en", token)
 
     def speak(self, text, lang, rate, stop_event):

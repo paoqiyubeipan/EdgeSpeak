@@ -44,8 +44,11 @@ class App : Application() {
         }
         val dir = DictData.dir(this)
         val started = System.currentTimeMillis()
-        japanese = JapaneseDictionary(dir)
-        english = EnglishDictionary(dir)
+        // 两本都打开了才赋值：中途出错时 japanese 还是 null，下次查词会重新打开
+        val ja = JapaneseDictionary(dir)
+        val en = EnglishDictionary(dir, assets)
+        english = en
+        japanese = ja
         Log.i(TAG, "词典就绪（${System.currentTimeMillis() - started}ms）")
     }
 
