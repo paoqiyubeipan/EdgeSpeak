@@ -1,4 +1,4 @@
-"""按住 Shift 把鼠标停在日语上：用 UI Automation 取光标下的文字（取不到时用 Windows 自带的日语 OCR），
+"""按住 Shift 把鼠标停在日语（或英文单词）上：用 UI Automation 取光标下的文字（取不到时用 Windows 自带的 OCR），
 查词后在旁边弹出卡片。"""
 import asyncio
 import base64
@@ -17,9 +17,9 @@ import comtypes.client
 from PIL import Image, ImageChops
 
 import dict_store
-from jp_ai import en_request, has_key, jp_request, provider_of
+from jp_ai import en_context_request, en_request, has_key, jp_request, provider_of
 from jp_card import Card, EnglishCard
-from jp_dict import EnglishDictionary, JapaneseDictionary
+from jp_dict import EnglishDictionary, EnglishHit, JapaneseDictionary, lookup_english
 
 log = logging.getLogger("EdgeSpeak")
 
@@ -261,9 +261,16 @@ def is_ascii_word(text):
     return text.isascii() and any(c.isalnum() for c in text)
 
 
+def mostly_latin(text):
+    """去掉空白后六成以上是半角字符：这段主要是英文（日语 OCR 把几个字母认成汉字时也算）。"""
+    chars = [c for c in text if not c.isspace()]
+    return bool(chars) and sum(c.isascii() for c in chars) >= 0.6 * len(chars)
+
+
 class ScreenOcr:
     """UI Automation 取不到字时（VS Code 编辑区、PDF、图片……）的后备：截取光标所在的一条屏幕，
-    用 Windows 自带的日语 OCR 识别，再找出光标下的字。要在 MTA 线程里创建和使用。"""
+    用 Windows 自带的日语 OCR 识别，再找出光标下的字。光标下是英文时可以换英文 OCR 再认一次（english=True）。
+    要在 MTA 线程里创建和使用。"""
 
     HALF_WIDTH = 500  # 截取范围（按 100% 缩放计），左右各 500、上下各 60 像素：光标所在行加上下几行当上下文
     HALF_HEIGHT = 60
@@ -277,8 +284,12 @@ class ScreenOcr:
         self.engine = OcrEngine.try_create_from_language(Language("ja"))
         if self.engine is None:
             raise RuntimeError("没有安装 Windows 日语 OCR（设置 → 时间和语言 → 语言 → 日语 → 光学字符识别）")
+        # 日语 OCR 认英文常常漏掉单词间的空格、认错字母；装了英文 OCR（英文系统一般自带）就用它认英文
+        self.en_engine = next((OcrEngine.try_create_from_language(lang)
+                               for lang in OcrEngine.available_recognizer_languages
+                               if lang.language_tag.lower().startswith("en")), None)
 
-    def _recognize(self, img):
+    def _recognize(self, img, engine):
         r, g, b = img.split()
         a = Image.new("L", img.size, 255)
         data = Image.merge("RGBA", (b, g, r, a)).tobytes()
@@ -286,10 +297,13 @@ class ScreenOcr:
                                                              img.width, img.height)
 
         async def run():
-            return await self.engine.recognize_async(bitmap)
+            return await engine.recognize_async(bitmap)
         return asyncio.run(run())
 
-    def get(self, x, y, scale):
+    def get(self, x, y, scale, english=False):
+        engine = self.en_engine if english else self.engine
+        if engine is None:
+            return None
         hw, hh = round(self.HALF_WIDTH * scale), round(self.HALF_HEIGHT * scale)
         left, top = x - hw, y - hh
         img = grab_screen(left, top, 2 * hw, 2 * hh)
@@ -298,7 +312,7 @@ class ScreenOcr:
             img = img.resize((img.width * zoom, img.height * zoom), Image.LANCZOS)
         cx, cy = (x - left) * zoom, (y - top) * zoom
         lines = []  # [(文字, 上, 下, 光标所在字的位置或 None, 那个字的矩形)]
-        for line in self._recognize(img).lines:
+        for line in self._recognize(img, engine).lines:
             words = list(line.words)
             if not words:
                 continue
@@ -307,8 +321,8 @@ class ScreenOcr:
             on_line = line_top - 2 <= cy <= line_bottom + 2
             text, offset, rect, prev = "", None, None, None
             for w in words:
-                if prev and is_ascii_word(prev) and is_ascii_word(w.text):
-                    text += " "  # 日语 OCR 逐字返回，只在英文单词之间补空格
+                if prev and (english or is_ascii_word(prev) and is_ascii_word(w.text)):
+                    text += " "  # 日语 OCR 逐字返回，只在英文单词之间补空格；英文 OCR 按单词返回
                 start = len(text)
                 text += w.text
                 r = w.bounding_rect
@@ -327,13 +341,14 @@ class ScreenOcr:
         # 把紧挨着的上一行、下一行也带上，作为上下文（日语折行时句子常跨行）
         text, line_top, line_bottom, offset, rect = lines[hit]
         height = line_bottom - line_top
+        # 英文折行处是单词间的空格；日语折行处直接相连，行首行尾是英文时用换行隔开
         if hit > 0 and line_top - lines[hit - 1][2] < height:
             before = lines[hit - 1][0]
-            joiner = "" if before and not is_ascii_word(before[-1]) else "\n"
+            joiner = " " if english else "" if before and not is_ascii_word(before[-1]) else "\n"
             text, offset = before + joiner + text, offset + len(before) + len(joiner)
         if hit + 1 < len(lines) and lines[hit + 1][1] - line_bottom < height:
             after = lines[hit + 1][0]
-            joiner = "" if after and not is_ascii_word(after[0]) else "\n"
+            joiner = " " if english else "" if after and not is_ascii_word(after[0]) else "\n"
             text += joiner + after
         return TextHit(text, offset, rect, "ocr")
 
@@ -418,9 +433,11 @@ def premultiplied_bgra(img):
 class LookupPopup:
     """界面线程：定时检查 Shift 和鼠标，显示 / 隐藏卡片。工作线程：取词、查词。"""
 
-    def __init__(self, speak, is_enabled, on_ocr_status=None, explainer=None, open_settings=None):
+    def __init__(self, speak, is_enabled, on_ocr_status=None, explainer=None, open_settings=None,
+                 english_enabled=lambda: True):
         self.speak = speak  # speak(text, lang)：lang 为 "ja" 或 "en"
         self.is_enabled = is_enabled
+        self.english_enabled = english_enabled  # 光标下不是日语时，是否查英文单词
         self.en_hwnd = None  # 英文单词卡片的窗口
         self.en_card = None
         self.en_rect = None  # 英文卡片显示时的屏幕矩形
@@ -467,6 +484,7 @@ class LookupPopup:
         except Exception:
             log.exception("打开词典失败")
             return
+        en_dict = None  # 英文取词用的英汉词典（这个线程自己的连接，第一次遇到英文时打开）
         self.ready.wait()
         log.info("查词功能就绪")
         while True:
@@ -496,6 +514,13 @@ class LookupPopup:
                     hit = ocr.get(x, y, monitor_at(x, y)[0])
                 if hit:
                     word = dictionary.lookup(hit.text, hit.offset)
+                if word is None and hit and self.english_enabled():
+                    if en_dict is None or en_dict.stale:
+                        en_dict = EnglishDictionary()
+                    if hit.source == "ocr":
+                        word, hit = self._english_from_ocr(ocr, en_dict, hit, x, y)
+                    else:
+                        word = lookup_english(en_dict, hit.text, hit.offset)
             except Exception:
                 log.exception("查词失败")
                 hit = None
@@ -504,6 +529,23 @@ class LookupPopup:
                          (time.monotonic() - started) * 1000)
             self.results.put((seq, x, y, word, hit))
             user32.PostMessageW(self.hwnd, WM_APP_RESULT, 0, 0)
+
+    @staticmethod
+    def _english_from_ocr(ocr, en_dict, hit, x, y):
+        """OCR 取到的字查不到日语词时找英文单词，返回（EnglishHit 或 None，用的那次识别结果）。
+        日语 OCR 认英文常漏空格、把字母认成数字或汉字；英文 OCR 认英文准，但会把旁边的日文认成乱码粘到单词上。
+        所以两个都认：一致时用英文 OCR 的；不一致时看光标这一段主要是不是英文。"""
+        ja_word = lookup_english(en_dict, hit.text, hit.offset)
+        en_hit = ocr.get(x, y, monitor_at(x, y)[0], english=True)
+        en_word = lookup_english(en_dict, en_hit.text, en_hit.offset) if en_hit else None
+        if en_word and ja_word:
+            a, b = en_word.surface.lower(), ja_word.surface.lower()
+            if a in b or b in a or mostly_latin(hit.text):
+                return en_word, en_hit
+            return ja_word, hit
+        if en_word and mostly_latin(hit.text):
+            return en_word, en_hit
+        return ja_word, hit
 
     @staticmethod
     def _open_dictionary():
@@ -588,7 +630,9 @@ class LookupPopup:
                     return 0
                 target = self._click_target(x, y) if self.card else None
                 if target == "ai":
-                    self._request_ai(self.card.word)
+                    self._request_ai(self.view["word"])  # 英文卡片的 card.word 是词典条目，不是取到的词
+                elif target == "title" and isinstance(self.card, EnglishCard):
+                    self.speak(self.card.word_text, "en")
                 elif target == "title":
                     log.info("点击卡片，读：%s", self.card.word.surface)
                     self.speak(self.card.word.surface, "ja")
@@ -718,7 +762,7 @@ class LookupPopup:
         anchor = tuple(round(v) for v in char_rect) if char_rect else (x - 1, y - 1, x + 1, y + 1)
         self.view = {"word": word, "x": x, "scale": scale, "work": work, "anchor": anchor, "placement": None}
         self._hide_english()
-        self.ai = self._initial_ai(jp_request(word))
+        self.ai = self._initial_ai(self._request_for(word))
         self.ai_due = None
         if self.ai["state"] is None and self.explainer.cfg.get("ai_auto", True):
             if has_key(self.explainer.cfg):
@@ -730,8 +774,11 @@ class LookupPopup:
 
     def _render(self):
         """按当前状态画卡片并摆好位置。高度会随 AI 输出变化：放在单词下方就往下长，放在上方就往上长。"""
-        v = self.view
-        card = Card(v["word"], v["scale"], self.ai)
+        v, word = self.view, self.view["word"]
+        if isinstance(word, EnglishHit):
+            card = EnglishCard(word.entry, word.surface, v["scale"], self.ai, word.dictionary_ready, in_context=True)
+        else:
+            card = Card(word, v["scale"], self.ai)
         img = card.render()
         m, s, anchor, work = card.margin, v["scale"], v["anchor"], v["work"]
         below = anchor[3] + round(8 * s) - m
@@ -747,6 +794,11 @@ class LookupPopup:
         self.anchor_rect = anchor
 
     # ---- AI 解释
+
+    @staticmethod
+    def _request_for(word):
+        """卡片上的词（WordInfo 或 EnglishHit）结合上下文解释的请求。"""
+        return en_context_request(word) if isinstance(word, EnglishHit) else jp_request(word)
 
     def _initial_ai(self, request):
         if self.explainer is None:
@@ -781,7 +833,7 @@ class LookupPopup:
             return
         # 同一个词可能被重新查过（新对象），按上下文和位置匹配
         on_update = self._ai_callback("jp", (word.context, word.span))
-        if self.explainer.explain(jp_request(word), on_update, manual):
+        if self.explainer.explain(self._request_for(word), on_update, manual):
             self.ai = {"state": "loading", "text": ""}
         else:
             self.ai = {"state": None, "text": "自动解释太频繁，已暂停一会儿（点这里手动解释）"}

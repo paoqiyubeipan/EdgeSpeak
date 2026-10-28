@@ -57,9 +57,16 @@ private const val MAX_SENTENCE = 200
 
 /** （start..end 所在的那一句，目标词在这句里的起点）。句子太长时以目标词为中心截取。 */
 fun sentenceAround(text: String, start: Int, end: Int): Pair<String, Int> {
-    var s = (SENTENCE_END.maxOf { text.lastIndexOf(it, start - 1) }) + 1
+    val s = (SENTENCE_END.maxOf { text.lastIndexOf(it, start - 1) }) + 1
     val ends = SENTENCE_END.map { text.indexOf(it, end) }.filter { it >= 0 }
-    var e = if (ends.isEmpty()) text.length else ends.min() + 1
+    val e = if (ends.isEmpty()) text.length else ends.min() + 1
+    return clipSentence(text, s, e, start, end)
+}
+
+/** text[s..e) 这一句太长时以目标词（start..end）为中心截取，去掉两头空白。sentenceAround、englishSentenceAround 共用。 */
+fun clipSentence(text: String, sentenceStart: Int, sentenceEnd: Int, start: Int, end: Int): Pair<String, Int> {
+    var s = sentenceStart
+    var e = sentenceEnd
     if (e - s > MAX_SENTENCE) {
         val half = (MAX_SENTENCE - (end - start)) / 2
         s = maxOf(s, start - half)

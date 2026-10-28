@@ -38,11 +38,11 @@ class LookupActivity : Activity() {
             return
         }
         if (DictData.ready(this)) {
-            panel.show(text, 0)
+            panel.show(text, -1)
         } else {
             panel.setStatus("第一次使用，正在解压词典…")
             app.prepare({ percent -> panel.setStatus("第一次使用，正在解压词典… $percent%") }) { error ->
-                if (error != null) panel.setStatus("打开词典失败：${error.message}") else panel.show(text, 0)
+                if (error != null) panel.setStatus("打开词典失败：${error.message}") else panel.show(text, -1)
             }
         }
     }

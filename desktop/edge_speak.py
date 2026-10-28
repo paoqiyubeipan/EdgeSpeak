@@ -42,6 +42,7 @@ DEFAULT_CONFIG = {
     "ja_voice": "ja-JP-NanamiNeural",
     "kanji_lang": "ja",  # 只有汉字没有假名时按哪种语言读：ja / zh
     "hover_lookup": True,  # 按住 Shift 悬停查日语词
+    "hover_english": True,  # 悬停在英文单词上时也查（ECDICT 英汉词典）
     "ai_provider": "cohere",  # AI 解释用哪个服务：cohere / mistral / openrouter
     "ai_model": "",  # Cohere 模型名，留空用默认聊天模型
     "mistral_model": "",  # Mistral 模型名，留空用 mistral-small-latest
@@ -787,7 +788,8 @@ def run_tray(cfg, first_run):
         show_settings(cfg, save_config, make_icon_image(64))
 
     popup = LookupPopup(lambda text, lang: speaker.say(text, lang=lang), lambda: cfg["hover_lookup"], on_ocr_status,
-                        explainer=Explainer(cfg), open_settings=open_settings)
+                        explainer=Explainer(cfg), open_settings=open_settings,
+                        english_enabled=lambda: cfg["hover_english"])
 
     # 词典：精简版安装包第一次运行时在后台下载；之后自动更新。装好后查词线程下次查词时自动换用新词典
     import dict_store
@@ -856,6 +858,10 @@ def run_tray(cfg, first_run):
         cfg["hover_lookup"] = not cfg["hover_lookup"]
         save_config(cfg)
 
+    def toggle_hover_english(icon, item):
+        cfg["hover_english"] = not cfg["hover_english"]
+        save_config(cfg)
+
     def open_config_dir(icon, item):
         os.startfile(CONFIG_DIR)
 
@@ -875,7 +881,9 @@ def run_tray(cfg, first_run):
         pystray.MenuItem("英文音色", submenu("en_voice", EN_VOICES, "Hello, this is the current English voice.")),
         pystray.MenuItem("日语音色", submenu("ja_voice", JA_VOICES, "こんにちは、これは今の日本語の音声です。")),
         pystray.MenuItem("只有汉字时", submenu("kanji_lang", KANJI_LANGS)),
-        pystray.MenuItem("按住 Shift 悬停查日语词", toggle_hover_lookup, checked=lambda item: cfg["hover_lookup"]),
+        pystray.MenuItem("按住 Shift 悬停查词", toggle_hover_lookup, checked=lambda item: cfg["hover_lookup"]),
+        pystray.MenuItem("    英文单词也查", toggle_hover_english, checked=lambda item: cfg["hover_english"],
+                         enabled=lambda item: cfg["hover_lookup"]),
         pystray.MenuItem(lambda item: "正在安装日语 OCR…" if ocr["installing"] else "安装日语 OCR（需要管理员确认）",
                          install_ocr, enabled=lambda item: not ocr["installing"],
                          visible=lambda item: ocr["ready"] is False),

@@ -5,7 +5,9 @@
 输出到 app/src/main/assets/dict/：
   jmdict.sqlite   JMdict 日英 + Kanjium 音高（原样复制）
   wikt.sqlite     维基词典英文版 + 中文版的日语词条（原样复制）
-  ecdict.sqlite   ECDICT 英汉：只留日语释义里会出现的英文单词（完整版 300 多 MB，手机上用不着）
+  ecdict.sqlite   ECDICT 英汉（完整版 300 多 MB，手机上用不着全部）：留下日语释义里会出现的英文单词和它们的原词，
+                  再加上普通英文单词（全小写字母、可带撇号和连字符，且有考试标签、变形或音标的，约 47 万条）
+                  和带撇号的词（don't、o'clock），供英文取词用。合计约 53 万条、64 MB
   system_core.dic Sudachi 分词词典
   manifest.json   每个文件的大小，首次启动时解压用来显示进度
 """
@@ -17,6 +19,7 @@ import sqlite3
 import sys
 
 WORD = re.compile(r"[A-Za-z][A-Za-z'-]*[A-Za-z]|[A-Za-z]")
+ENGLISH_KEY = re.compile(r"^[a-z][a-z'\-]*$")  # 普通英文单词（不要词组、专有名词、带数字的）
 
 
 def newest(folder, prefix):
@@ -48,11 +51,19 @@ def build_ecdict(src, dst, vocab):
     # 释义里出现的可能是变形（eating），把它的原词（eat）也留下
     lemmas = {lemma for form, lemma in db.execute("SELECT form, lemma FROM en_forms") if form in vocab}
     keep = vocab | lemmas
-    rows = [r for r in db.execute("SELECT key, word, phonetic, translation, tag, exchange FROM en") if r[0] in keep]
+
+    def wanted(key, phonetic, tag, exchange):
+        """英文取词用：普通英文单词里有考试标签、变形或音标的（没有这些的多半是生僻词、缩写），以及带撇号的词。"""
+        return bool(ENGLISH_KEY.match(key) and (tag or exchange or phonetic)) or "'" in key
+
+    rows = [r for r in db.execute("SELECT key, word, phonetic, translation, tag, exchange FROM en")
+            if r[0] and (r[0] in keep or wanted(r[0], r[2], r[4], r[5]))]
     out.executemany("INSERT INTO en VALUES (?, ?, ?, ?, ?, ?)", rows)
     kept = {r[0] for r in rows}
+    # 变形 → 原词：变形本身是要留的词（释义里出现的，或像普通英文单词的），原词也留下了
     out.executemany("INSERT INTO en_forms VALUES (?, ?)",
-                    [(f, l) for f, l in db.execute("SELECT form, lemma FROM en_forms") if f in vocab and l in kept])
+                    [(f, l) for f, l in db.execute("SELECT form, lemma FROM en_forms")
+                     if (f in vocab or ENGLISH_KEY.match(f) or "'" in f) and l in kept])
     out.commit()
     out.execute("VACUUM")
     out.close()

@@ -1,4 +1,5 @@
-"""结合上下文解释日语词：把句子、目标词和词典义项发给 AI（Cohere / Mistral / OpenRouter），流式返回中文解释。"""
+"""结合上下文解释日语词（和英文单词）：把句子、目标词和词典义项发给 AI（Cohere / Mistral / OpenRouter），
+流式返回中文解释。"""
 import base64
 import logging
 import os
@@ -10,7 +11,7 @@ from collections import OrderedDict, deque
 import win32crypt
 
 import ai_providers
-from jp_dict import register_labels, sentence_around, to_hiragana
+from jp_dict import english_sentence_around, register_labels, sentence_around, to_hiragana
 
 log = logging.getLogger("EdgeSpeak")
 
@@ -34,6 +35,13 @@ EN_SYSTEM_PROMPT = """你是英语老师，学习者是中文母语者，正在�
 只按下面两行的格式用简体中文回答，不要寒暄，不要用 Markdown：
 意思：这个英文单词在这条释义里的意思，一两句话
 整条：整条英文释义的中文翻译"""
+
+EN_CONTEXT_PROMPT = """你是英语老师，帮中文母语的学习者理解句子里的一个英文单词。
+用户会给出：句子（目标词用【】标出）、词典里的原形和中文释义。
+句子里可能有网络用语、俚语、缩写或专有名词，按它在这句话里的实际用法解释。
+只按下面两行的格式用简体中文回答，不要寒暄，不要用 Markdown：
+意思：这个词在这句话里的具体意思，一两句话
+翻译：整句的中文翻译"""
 
 
 # ---------------------------------------------------------------- 密钥（用 Windows DPAPI 加密后存进配置，只有当前用户能解开）
@@ -84,6 +92,18 @@ def build_en_prompt(en_word, gloss, word):
     return f"日语词：{word.base}（{word.base_reading}）\n英文释义：{gloss}\n看不懂的英文单词：{en_word}"
 
 
+def build_en_context_prompt(hit):
+    sentence, k = english_sentence_around(hit.context, *hit.span)
+    marked = f"{sentence[:k]}【{hit.surface}】{sentence[k + len(hit.surface):]}"
+    e = hit.entry
+    if e:
+        base = e.word + (f"（{e.via}）" if e.via else "")
+        meanings = "\n".join(f"- {line}" for line in e.lines) or "（无）"
+    else:
+        base, meanings = "（离线词典里没有这个词）", "（无）"
+    return f"句子：{marked}\n目标词：{hit.surface}\n词典原形：{base}\n词典释义：\n{meanings}"
+
+
 def jp_request(word):
     """结合上下文解释日语词的请求：(系统提示, 用户提示)。"""
     return SYSTEM_PROMPT, build_prompt(word)
@@ -92,6 +112,11 @@ def jp_request(word):
 def en_request(en_word, gloss, word):
     """解释日语词英文释义里某个英文单词的请求。"""
     return EN_SYSTEM_PROMPT, build_en_prompt(en_word, gloss, word)
+
+
+def en_context_request(hit):
+    """结合句子解释按住 Shift 查到的英文单词（jp_dict.EnglishHit）的请求。"""
+    return EN_CONTEXT_PROMPT, build_en_context_prompt(hit)
 
 
 FIRST_FIELDS = ("释义", "意思")  # 两种回答格式各自的第一行

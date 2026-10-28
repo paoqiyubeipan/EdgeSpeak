@@ -518,14 +518,17 @@ class JapaneseCard(context: Context) : CardBase(context) {
     }
 }
 
-/** 点日语卡片里的英文单词后显示的英文卡片。entry 为 null 表示查不到。点标题读英文；AI 区解释它在那条释义里的意思。 */
+/** 英文卡片：点日语卡片里的英文单词后显示，或者点到的本身就是英文单词（inContext）。entry 为 null 表示查不到。
+ *  点标题读英文；AI 区解释它在那条释义里的意思，inContext 时解释它在原文句子里的意思。 */
 class EnglishCard(context: Context) : CardBase(context) {
     var entry: EnglishWord? = null
     var clicked: String = ""
+    var inContext = false // AI 结合原文句子解释，而不是结合日语释义
 
-    fun show(entry: EnglishWord?, clicked: String, ai: AiState) {
+    fun show(entry: EnglishWord?, clicked: String, ai: AiState, inContext: Boolean = false) {
         this.entry = entry
         this.clicked = clicked
+        this.inContext = inContext
         this.ai = ai
     }
 
@@ -598,13 +601,15 @@ class EnglishCard(context: Context) : CardBase(context) {
             y += dp(19f) * formLines.size + dp(6f)
         }
 
-        // AI：这个英文单词在那条日语释义里的意思（点了才请求）
+        // AI：这个英文单词在原文句子里的意思（和日语卡片一样可以自动请求）；从日语卡片点进来时是在那条日语释义里的意思（点了才请求）
         val fields = if (ai.state == "streaming" || ai.state == "done") parseAnswer(ai.text) else emptyMap()
-        y = layoutAi(y + dp(4f), width, fields, listOf("意思", "整条"), "它在这条释义里是什么意思")
+        y = if (inContext) layoutAi(y + dp(4f), width, fields, listOf("意思", "翻译"), "结合上下文解释（中文）")
+        else layoutAi(y + dp(4f), width, fields, listOf("意思", "整条"), "它在这条释义里是什么意思")
 
         val hint = paint(11.5f, FAINT)
         val hintY = y
-        ops += { c -> c.drawText("点单词朗读", pad, baseline(hint, hintY), hint) }
+        val hintText = if (inContext) "点单词朗读 · 点上面句子里的其他词换词查" else "点单词朗读"
+        ops += { c -> c.drawText(hintText, pad, baseline(hint, hintY), hint) }
         contentHeight = y + dp(18f) + pad
     }
 }

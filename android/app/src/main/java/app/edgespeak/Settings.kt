@@ -24,6 +24,10 @@ class Settings(context: Context) {
         get() = prefs.getBoolean("ai_auto", true)
         set(value) = prefs.edit().putBoolean("ai_auto", value).apply()
 
+    var lookupEnglish: Boolean // 点到的不是日语时查英文单词（ECDICT 英汉词典）
+        get() = prefs.getBoolean("lookup_english", true)
+        set(value) = prefs.edit().putBoolean("lookup_english", value).apply()
+
     var bubble: Boolean // 开了悬浮取词服务时显示悬浮按钮
         get() = prefs.getBoolean("bubble", true)
         set(value) = prefs.edit().putBoolean("bubble", value).apply()

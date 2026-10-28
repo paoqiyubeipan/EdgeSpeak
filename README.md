@@ -2,8 +2,8 @@
 
 日语查词 + 朗读，给中文母语的日语学习者用。
 
-- **desktop/**：Windows 版。选中文字按 Ctrl+Alt+Q 朗读（微软 Edge 神经网络语音）；按住 Shift 悬停在日语上弹出查词卡片：假名注音、音高、原型和变形拆解、英文和中文释义（标出网络用语、俚语等），点英文单词查中文，AI 结合上下文解释（Cohere / Mistral / OpenRouter，可设备用模型）。取不到文字时用 Windows 日语 OCR。词典每天自动更新。详见 [desktop/README.md](desktop/README.md)。
-- **android/**：安卓版，同一套查词逻辑。选中文字后在菜单里点「EdgeSpeak 查词 / 朗读」，或用悬浮按钮点屏幕取词（读界面文字，读不到时用 ML Kit 日语 OCR）。详见 [android/README.md](android/README.md)。
+- **desktop/**：Windows 版。选中文字按 Ctrl+Alt+Q 朗读（微软 Edge 神经网络语音）；按住 Shift 悬停在日语上弹出查词卡片：假名注音、音高、原型和变形拆解、英文和中文释义（标出网络用语、俚语等），点英文单词查中文，AI 结合上下文解释（Cohere / Mistral / OpenRouter，可设备用模型）。停在英文单词上弹出英文卡片（ECDICT 英汉释义、词形还原、AI 结合句子解释）。取不到文字时用 Windows OCR。词典每天自动更新。详见 [desktop/README.md](desktop/README.md)。
+- **android/**：安卓版，同一套查词逻辑。选中文字后在菜单里点「EdgeSpeak 查词 / 朗读」，或用悬浮按钮点屏幕取词（读界面文字，读不到时用 ML Kit 日语 OCR）。英文单词也能查。详见 [android/README.md](android/README.md)。
 
 安装包和 APK 在 [Releases](../../releases) 页面。
 

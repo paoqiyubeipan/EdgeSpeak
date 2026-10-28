@@ -27,7 +27,7 @@ import android.widget.Switch
 import android.widget.TextView
 import kotlin.concurrent.thread
 
-/** 设置页（也是启动页）：用法说明、悬浮取词、AI 服务和密钥、备用模型、朗读语音、词典。 */
+/** 设置页（也是启动页）：用法说明（和英文取词开关）、悬浮取词、AI 服务和密钥、备用模型、朗读语音、词典。 */
 class SettingsActivity : Activity() {
     private val app get() = App.instance
     private val settings get() = app.settings
@@ -76,13 +76,19 @@ class SettingsActivity : Activity() {
         setContentView(scroll)
 
         root.addView(text("EdgeSpeak", 24f, bold = true))
-        root.addView(hint("日语查词 + 朗读。词典都在手机里，不联网也能查；只有 AI 解释需要联网。"))
+        root.addView(hint("日语查词（英文单词也能查）+ 朗读。词典都在手机里，不联网也能查；只有 AI 解释需要联网。"))
 
         heading(root, "怎么用")
         root.addView(text("① 选字菜单：在任何 App 里长按选中文字，弹出的菜单里点「EdgeSpeak 查词」或「EdgeSpeak 朗读」" +
             "（有的 App 要先点菜单里的 ⋮ 才能看到）。\n② 悬浮取词：打开下面的辅助功能后，屏幕边上出现蓝色悬浮按钮；" +
             "点它，再点屏幕上的日语。游戏、图片、漫画里的字也能识别。\n③ 卡片上：点标题朗读，点英文单词查它的中文意思，" +
-            "点上面句子里的其他字换词查。", 15f))
+            "点上面句子里的其他字换词查。\n④ 选中或点到的是英文单词时，显示英汉词典的释义，AI 结合句子解释它的意思。", 15f))
+        root.addView(Switch(this).apply {
+            text = "英文单词也查"
+            textSize = 15f
+            isChecked = settings.lookupEnglish
+            setOnCheckedChangeListener { _, checked -> settings.lookupEnglish = checked }
+        })
 
         heading(root, "悬浮取词")
         accessibilityStatus = hint("")
@@ -194,7 +200,7 @@ class SettingsActivity : Activity() {
         }, 1500)
         if (DictData.ready(this)) dictStatus.text = "✓ 词典已就绪。"
         else {
-            dictStatus.text = "第一次使用要先解压词典（约 320 MB）…"
+            dictStatus.text = "第一次使用要先解压词典（约 370 MB）…"
             app.prepare({ dictStatus.text = "正在解压词典… $it%" }) { error ->
                 dictStatus.text = if (error == null) "✓ 词典已就绪。" else "解压词典失败：${error.message}（手机空间不够？）"
             }

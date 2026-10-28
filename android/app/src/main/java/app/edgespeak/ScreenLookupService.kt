@@ -30,8 +30,9 @@ import com.google.mlkit.vision.text.japanese.JapaneseTextRecognizerOptions
 import kotlin.math.abs
 import kotlin.math.hypot
 
-/** 悬浮取词：一个可拖动的悬浮按钮。点它进入取词模式，再点屏幕上的日语，旁边弹出查词面板。
- *  取字先用辅助功能读界面文字（能精确到点中的那个字）；读不到时（游戏、图片、漫画）截屏用 ML Kit 日语 OCR。
+/** 悬浮取词：一个可拖动的悬浮按钮。点它进入取词模式，再点屏幕上的日语（或英文单词），旁边弹出查词面板。
+ *  取字先用辅助功能读界面文字（能精确到点中的那个字）；读不到时（游戏、图片、漫画）截屏用 ML Kit 日语 OCR
+ *  （日语模型也认拉丁字母，英文单词之间按位置补空格）。
  *  所有悬浮窗都是辅助功能悬浮窗，不需要“显示在其他应用上层”权限。 */
 class ScreenLookupService : AccessibilityService() {
     private val app get() = App.instance
@@ -125,7 +126,7 @@ class ScreenLookupService : AccessibilityService() {
     private fun startPicking() {
         closePanel()
         val hint = TextView(this).apply {
-            text = "点要查的日语（再点悬浮按钮取消）"
+            text = if (app.settings.lookupEnglish) "点要查的日语或英文单词（再点悬浮按钮取消）" else "点要查的日语（再点悬浮按钮取消）"
             setTextColor(Color.WHITE)
             textSize = 14f
             setBackgroundColor(0xCC0078D4.toInt())
@@ -173,7 +174,7 @@ class ScreenLookupService : AccessibilityService() {
                 // 读到了界面文字但不知道点的是哪个字：用 OCR 认出点中的那几个字，到原文里找位置（原文没有认错的字）
                 hit != null && ocr != null -> showPanel(locate(hit.text, ocr) ?: ocr, y)
                 ocr != null -> showPanel(ocr, y)
-                hit != null -> showPanel(Hit(hit.text, 0), y) // 从头查，可以在面板里点别的字
+                hit != null -> showPanel(Hit(hit.text, -1), y) // 从头查，可以在面板里点别的字
                 else -> Toast.makeText(this, "这里没有找到文字", Toast.LENGTH_SHORT).show()
             }
         }
@@ -197,6 +198,7 @@ class ScreenLookupService : AccessibilityService() {
 
     /** 从辅助功能节点树里找点中的文字。offset 为 -1 表示找到了文字但不知道点的是哪个字。 */
     private fun textFromNodes(x: Int, y: Int): Hit? {
+        val english = app.settings.lookupEnglish
         var best: AccessibilityNodeInfo? = null
         var bestArea = Long.MAX_VALUE
         val bounds = Rect()
@@ -205,7 +207,7 @@ class ScreenLookupService : AccessibilityService() {
             node.getBoundsInScreen(bounds)
             if (!bounds.contains(x, y)) return
             val text = node.text
-            if (!text.isNullOrBlank() && isJapanese(text.toString())) {
+            if (!text.isNullOrBlank() && (isJapanese(text.toString()) || english && hasLatin(text))) {
                 val area = bounds.width().toLong() * bounds.height()
                 if (area <= bestArea) {
                     best = node
@@ -295,9 +297,14 @@ class ScreenLookupService : AccessibilityService() {
             for ((li, line) in lines.withIndex()) {
             val box = line.boundingBox ?: continue
             if (!box.contains(x, y) && !(y in box.top..box.bottom && x in box.left - dp(16)..box.right + dp(16))) continue
-            // 日语元素之间不加空格
+            // 日语元素之间不加空格，英文单词之间补上
             val pieces = mutableListOf<Pair<String, Rect?>>()
-            for (element in line.elements) for (symbol in element.symbols) pieces += symbol.text to symbol.boundingBox
+            var previous = ""
+            for (element in line.elements) {
+                if (needsSpace(previous, element.text)) pieces += " " to null
+                for (symbol in element.symbols) pieces += symbol.text to symbol.boundingBox
+                previous = element.text
+            }
             val lineText = pieces.joinToString("") { it.first }
             var index = 0
             var offset = -1
@@ -312,16 +319,39 @@ class ScreenLookupService : AccessibilityService() {
                 }
                 index += t.length
             }
-            fun joined(part: List<com.google.mlkit.vision.text.Text.Line>) =
-                part.joinToString("") { l -> l.elements.flatMap { it.symbols }.joinToString("") { it.text } }
-            val before = joined(lines.subList(0, li))
-            val after = joined(lines.subList(li + 1, lines.size))
+            val before = lines.subList(0, li).fold("") { acc, l -> joinLines(acc, ocrLineText(l)) }
+            val after = lines.subList(li + 1, lines.size).fold("") { acc, l -> joinLines(acc, ocrLineText(l)) }
+            val head = if (needsSpace(before, lineText)) "$before " else before
             Log.i(App.TAG, "取词（OCR）@$offset")
-            return clip(before + lineText + after, before.length + offset.coerceAtLeast(0))
+            return clip(joinLines(head + lineText, after), if (offset < 0) -1 else head.length + offset)
             }
         }
         return null
     }
+
+    /** OCR 的一行：元素按顺序拼起来，英文单词之间补空格。 */
+    private fun ocrLineText(line: com.google.mlkit.vision.text.Text.Line): String {
+        val text = StringBuilder()
+        for (element in line.elements) {
+            val piece = element.symbols.joinToString("") { it.text }
+            if (needsSpace(text.toString(), piece)) text.append(' ')
+            text.append(piece)
+        }
+        return text.toString()
+    }
+
+    /** 两行接起来：英文折行处是单词间的空格，日语折行处直接相连。 */
+    private fun joinLines(a: String, b: String) = if (needsSpace(a, b)) "$a $b" else a + b
+
+    /** 前一段以英文（字母、数字、标点）结尾、后一段以英文字母或数字开头时，中间要有空格。 */
+    private fun needsSpace(before: String, after: String): Boolean {
+        val a = before.lastOrNull() ?: return false
+        val b = after.firstOrNull() ?: return false
+        return a.code in 0x21..0x7E && (b in 'a'..'z' || b in 'A'..'Z' || b in '0'..'9')
+    }
+
+    /** 有没有英文字母（全角的也算）：节点里只有英文时，英文取词关着就不要它。 */
+    private fun hasLatin(text: CharSequence) = text.any { it in 'a'..'z' || it in 'A'..'Z' || it in 'ａ'..'ｚ' || it in 'Ａ'..'Ｚ' }
 
     @SuppressLint("ClickableViewAccessibility")
     private fun showPanel(hit: Hit, tapY: Int) {
@@ -343,10 +373,10 @@ class ScreenLookupService : AccessibilityService() {
         wm.addView(host, params)
         panelHost = host
         raiseBubble()
-        if (DictData.ready(this)) panel.show(hit.text, hit.offset.coerceAtLeast(0))
+        if (DictData.ready(this)) panel.show(hit.text, hit.offset)
         else {
             panel.setStatus("第一次使用，正在解压词典…")
-            app.prepare({ panel.setStatus("第一次使用，正在解压词典… $it%") }) { panel.show(hit.text, hit.offset.coerceAtLeast(0)) }
+            app.prepare({ panel.setStatus("第一次使用，正在解压词典… $it%") }) { panel.show(hit.text, hit.offset) }
         }
     }
 

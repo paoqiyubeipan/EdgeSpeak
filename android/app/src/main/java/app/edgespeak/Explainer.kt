@@ -5,7 +5,7 @@ import android.os.Looper
 import android.util.Log
 import java.util.concurrent.Executors
 
-/** 结合上下文解释日语词：把句子、目标词和词典释义发给 AI，流式返回中文解释（和电脑版 jp_ai.py 一致）。 */
+/** 结合上下文解释日语词（和英文单词）：把句子、目标词和词典释义发给 AI，流式返回中文解释（和电脑版 jp_ai.py 一致）。 */
 
 private const val MAX_SENSES = 12
 private const val CACHE_SIZE = 200
@@ -26,6 +26,13 @@ private const val EN_SYSTEM_PROMPT = """你是英语老师，学习者是中文�
 只按下面两行的格式用简体中文回答，不要寒暄，不要用 Markdown：
 意思：这个英文单词在这条释义里的意思，一两句话
 整条：整条英文释义的中文翻译"""
+
+private const val EN_CONTEXT_PROMPT = """你是英语老师，帮中文母语的学习者理解句子里的一个英文单词。
+用户会给出：句子（目标词用【】标出）、词典里的原形和中文释义。
+句子里可能有网络用语、俚语、缩写或专有名词，按它在这句话里的实际用法解释。
+只按下面两行的格式用简体中文回答，不要寒暄，不要用 Markdown：
+意思：这个词在这句话里的具体意思，一两句话
+翻译：整句的中文翻译"""
 
 private val FIELDS = listOf("释义", "读音", "义项", "拆解", "翻译", "意思", "整条")
 private val FIRST_FIELDS = listOf("释义", "意思") // 两种回答格式各自的第一行
@@ -50,6 +57,16 @@ fun jpRequest(word: WordInfo): AiRequest {
 
 fun enRequest(enWord: String, gloss: String, word: WordInfo) =
     AiRequest(EN_SYSTEM_PROMPT, "日语词：${word.base}（${word.baseReading}）\n英文释义：$gloss\n看不懂的英文单词：$enWord")
+
+/** 结合句子解释点到的英文单词（不是日语时）的请求。 */
+fun enContextRequest(hit: EnglishHit): AiRequest {
+    val (sentence, k) = englishSentenceAround(hit.context, hit.spanStart, hit.spanEnd)
+    val marked = sentence.substring(0, k) + "【${hit.surface}】" + sentence.substring(minOf(sentence.length, k + hit.surface.length))
+    val e = hit.entry
+    val base = if (e != null) e.word + (if (e.via.isNotEmpty()) "（${e.via}）" else "") else "（离线词典里没有这个词）"
+    val meanings = e?.lines?.takeIf { it.isNotEmpty() }?.joinToString("\n") { "- $it" } ?: "（无）"
+    return AiRequest(EN_CONTEXT_PROMPT, "句子：$marked\n目标词：${hit.surface}\n词典原形：$base\n词典释义：\n$meanings")
+}
 
 /** 去掉正文里的 <think>…</think>；思考还没结束（只有开头标签）时，后面的都不算正文。 */
 fun stripThinking(text: String): String {

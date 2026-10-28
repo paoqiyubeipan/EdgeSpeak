@@ -1,8 +1,10 @@
-"""日语查词：分词（MeCab + UniDic）、还原原型、查 JMdict / 维基词典释义和 Kanjium 音高。"""
+"""日语查词：分词（MeCab + UniDic）、还原原型、查 JMdict / 维基词典释义和 Kanjium 音高。
+英文取词：找出光标处的英文单词，查 ECDICT 英汉词典。"""
 import json
 import pathlib
 import re
 import sqlite3
+import unicodedata
 from dataclasses import dataclass, field
 
 import fugashi
@@ -160,6 +162,35 @@ def sentence_around(text, start, end):
     s = max(text.rfind(c, 0, start) for c in SENTENCE_END) + 1
     ends = [i for i in (text.find(c, end) for c in SENTENCE_END) if i >= 0]
     e = min(ends) + 1 if ends else len(text)
+    return _clip_sentence(text, s, e, start, end)
+
+
+# 英文的句号后面要跟空白才算句末（3.5 里的点不算）；中日文的句号、换行照旧
+EN_SENTENCE_END = re.compile(r"[.!?]+[\"'”’)\]]*(?=\s|$)|[。！？\n]")
+# 这些缩写和单个大写字母（人名缩写 J. K.）后面的点不是句末
+EN_ABBREVIATIONS = {"mr", "mrs", "ms", "dr", "st", "vs", "etc", "e.g", "i.e", "u.s", "jr", "sr", "prof", "no", "fig",
+                    "approx", "dept", "inc", "ltd", "co", "mt", "jan", "feb", "aug", "sept", "oct", "nov", "dec"}
+
+
+def _sentence_ends(text, pos, endpos):
+    for m in EN_SENTENCE_END.finditer(text, pos, endpos):
+        before = re.search(r"(\S+)$", text[max(0, m.start() - 12):m.start()])
+        word = before.group(1) if before else ""
+        if m.group().startswith(".") and (word.lower().rstrip(".") in EN_ABBREVIATIONS or re.fullmatch(r"[A-Z]", word)):
+            continue
+        yield m
+
+
+def english_sentence_around(text, start, end):
+    """和 sentence_around 一样，按英文的断句规则。"""
+    s = 0
+    for m in _sentence_ends(text, 0, start):
+        s = m.end()
+    m = next(_sentence_ends(text, end, len(text)), None)
+    return _clip_sentence(text, s, m.end() if m else len(text), start, end)
+
+
+def _clip_sentence(text, s, e, start, end):
     if e - s > MAX_SENTENCE:
         half = (MAX_SENTENCE - (end - start)) // 2
         s, e = max(s, start - half), min(e, end + half)
@@ -237,6 +268,103 @@ class EnglishDictionary:
 def ipa(phonetic):
     """ECDICT 的音标用了几个替代字符，换成标准的国际音标。"""
     return phonetic.replace("ә", "ə").replace(":", "ː").replace("'", "ˈ").replace("ɒː", "ɔː")
+
+
+# ---------------------------------------------------------------- 英文取词（按住 Shift 停在英文单词上）
+
+EN_JOINERS = set(".\\@:#=")  # 夹在两个字母数字之间时，说明是网址、路径、邮箱、代码的一部分
+# 整段（空白之间）像网址、路径时也不查：https://、C:\、/usr/bin、a/b/c；单个斜杠的 and/or、his/her 照查
+EN_PATH = re.compile(r"://|^[A-Za-z]:[\\/]|\\|^[/~]|/.*/|^www\.", re.I)
+
+
+def halfwidth(text):
+    """全角英数（ＡＢＣ）转成半角。逐字替换，长度不变，位置都对得上。"""
+    return "".join(chr(ord(c) - 0xFEE0) if "！" <= c <= "～" else c for c in text)
+
+
+def is_latin(c):
+    """英文单词里的字母：ASCII 字母和带重音的拉丁字母（café、naïve、résumé）。"""
+    return c.isalpha() and (c.isascii() or "À" <= c <= "ɏ")
+
+
+def in_word(c):
+    return is_latin(c) or c.isdigit() or c in "_'’-"
+
+
+def strip_accents(word):
+    return "".join(c for c in unicodedata.normalize("NFKD", word) if not unicodedata.combining(c))
+
+
+@dataclass
+class EnglishHit:
+    """光标处的英文单词。context / span 和 WordInfo 的同名字段一样：给 AI 当上下文，也用来判断是不是同一个词。"""
+    surface: str  # 原文里的写法：Running、don't、well-known
+    entry: object  # EnglishWord；词典里没有时为 None
+    context: str
+    span: tuple  # surface 在 context 里的位置
+    dictionary_ready: bool = True  # 英汉词典是否已下载（精简版第一次运行时还没有）
+
+    @property
+    def base(self):
+        return self.entry.word if self.entry else self.surface
+
+
+def english_word_at(text, offset):
+    """text[offset] 处英文单词的 (起点, 终点)。不在字母上，或是代码标识符、网址、路径里的一段时返回 None。"""
+    text = halfwidth(text)
+    if not 0 <= offset < len(text) or not is_latin(text[offset]):
+        return None
+    s, e = offset, offset + 1
+    while s > 0 and in_word(text[s - 1]):
+        s -= 1
+    while e < len(text) and in_word(text[e]):
+        e += 1
+    # 两头的撇号、连字符不算（'quoted'、破折号 --），光标在字母上所以不会越过 offset
+    while text[s] in "'’-":
+        s += 1
+    while text[e - 1] in "'’-":
+        e -= 1
+    if any(c.isdigit() or c == "_" for c in text[s:e]):
+        return None  # mp3、v2、my_var
+    if s >= 2 and text[s - 1] in EN_JOINERS and text[s - 2].isalnum():
+        return None  # example.com、C:\Users、user@mail
+    if e + 1 < len(text) and text[e] in EN_JOINERS and text[e + 1].isalnum():
+        return None
+    ts, te = s, e
+    while ts > 0 and not text[ts - 1].isspace():
+        ts -= 1
+    while te < len(text) and not text[te].isspace():
+        te += 1
+    if EN_PATH.search(text[ts:te]):
+        return None
+    return s, e
+
+
+def lookup_english(en_dict, text, offset):
+    """text[offset] 处的英文单词 → EnglishHit。不在英文单词上时返回 None。
+    先查整体（well-known、don't），查不到再查光标所在的那一段（state-of-the-art 的 art）和去掉 's 的形式。"""
+    span = english_word_at(text, offset)
+    if span is None:
+        return None
+    s, e = span
+    plain = halfwidth(text)
+    run = plain[s:e]
+    candidates = [(s, e)]
+    if "-" in run:
+        part_s = max(s, plain.rfind("-", s, offset) + 1)
+        part_e = plain.find("-", offset, e)
+        candidates.append((part_s, e if part_e < 0 else part_e))
+    if run[-2:].lower() in ("'s", "’s"):
+        candidates.append((s, e - 2))  # John's、today's
+    for cs, ce in dict.fromkeys(candidates):
+        form = plain[cs:ce].replace("’", "'")
+        entry = en_dict.lookup(form) or (en_dict.lookup(strip_accents(form)) if not form.isascii() else None)
+        if entry:
+            return EnglishHit(text[cs:ce], entry, text, (cs, ce), en_dict.ready)
+    # 词典里没有：普通单词照样弹出卡片（专有名词、新词可以让 AI 解释）；驼峰式的多半是代码，不弹
+    if len(run) < 2 or re.search(r"[a-z][A-Z]", run):
+        return None
+    return EnglishHit(text[s:e], None, text, (s, e), en_dict.ready)
 
 
 @dataclass
@@ -456,8 +584,13 @@ class JapaneseDictionary:
                 return [form]  # 查到的本身就是假名写法
             return [kana for kana, applies in e["r"] if not applies or form in applies]
 
+        def rank(e):
+            """按假名查到好几个词条时，这个读音排在前面的优先：この 是「此の」的第一个读音，只是「九」的第四个。"""
+            kana = [k for k, _ in e["r"]]
+            return kana.index(form) if form in kana else 0
+
         candidates = [(e, readings(e)) for e in entries]
-        candidates = [(e, r) for e, r in candidates if r]
+        candidates = sorted(((e, r) for e, r in candidates if r), key=lambda c: rank(c[0]))
         for e, r in candidates:
             if mecab_reading in r:
                 return e, r[0]

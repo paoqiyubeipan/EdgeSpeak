@@ -17,6 +17,9 @@ data class TailPart(val surface: String, val base: String, val pos1: String, val
 
 data class ZhSense(val text: String, val tags: List<String>)
 
+/** 查词结果：日语词（WordInfo），或者点到的不是日语时的英文单词（EnglishHit）。 */
+sealed interface LookupResult
+
 data class WordInfo(
     val surface: String, // 光标处的整个词，含变形：食べなかった
     val ruby: List<Ruby>,
@@ -30,7 +33,7 @@ data class WordInfo(
     val pos: List<String>,
     val tail: List<TailPart>, // 原型后面的变形词尾，用来拆解
     val zh: List<ZhSense>, // 中文维基词典的释义
-) {
+) : LookupResult {
     /** 标题这几个字在这句话里的读音（平假名）。 */
     val surfaceReading get() = toHiragana(ruby.joinToString("") { it.reading ?: it.text })
 }
@@ -231,7 +234,12 @@ class JapaneseDictionary(dir: File) {
             if (kana.any { it.getString(0) == form }) return listOf(form) // 查到的本身就是假名写法
             return kana.filter { it.isNull(1) || it.getJSONArray(1).strings().contains(form) }.map { it.getString(0) }
         }
-        val candidates = entries.map { it to readings(it) }.filter { it.second.isNotEmpty() }
+        // 按假名查到好几个词条时，这个读音排在前面的优先：この 是「此の」的第一个读音，只是「九」的第四个
+        fun rank(e: JSONObject): Int {
+            val r = e.getJSONArray("r")
+            return (0 until r.length()).firstOrNull { r.getJSONArray(it).getString(0) == form } ?: 0
+        }
+        val candidates = entries.map { it to readings(it) }.filter { it.second.isNotEmpty() }.sortedBy { rank(it.first) }
         candidates.firstOrNull { tokenReading in it.second }?.let { return it.first to it.second[0] }
         candidates.firstOrNull()?.let { return it.first to it.second[0] }
         return null to tokenReading.ifEmpty { form }

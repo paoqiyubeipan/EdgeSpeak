@@ -49,14 +49,14 @@ class App : Application() {
         Log.i(TAG, "词典就绪（${System.currentTimeMillis() - started}ms）")
     }
 
-    /** 查 text[offset] 处的日语词，结果在主线程里交给 callback（不是日语时为 null）。 */
-    fun lookup(text: String, offset: Int, callback: (WordInfo?) -> Unit) = lookupThread.execute {
+    /** 查 text[offset] 处的日语词，不是日语时（设置里开了的话）查英文单词。结果在主线程里交给 callback（都不是时为 null）。 */
+    fun lookup(text: String, offset: Int, callback: (LookupResult?) -> Unit) = lookupThread.execute {
         val word = runCatching {
             open()
             val started = System.currentTimeMillis()
-            japanese!!.lookup(text, offset).also {
-                Log.i(TAG, "查词（${System.currentTimeMillis() - started}ms）")
-            }
+            val found: LookupResult? = japanese!!.lookup(text, offset)
+                ?: if (settings.lookupEnglish) english!!.lookupAt(text, offset) else null
+            found.also { Log.i(TAG, "查词（${System.currentTimeMillis() - started}ms）") }
         }.onFailure { Log.e(TAG, "查词失败", it) }.getOrNull()
         main.post { callback(word) }
     }

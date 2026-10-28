@@ -486,13 +486,14 @@ def en_bold(size):
 
 
 class EnglishCard(Card):
-    """点日语卡片里的英文单词后弹出的英文卡片。entry 是 jp_dict.EnglishWord，查不到时为 None。
-    header_bottom 之上点击读这个英文单词。"""
+    """英文卡片：点日语卡片里的英文单词后弹出，或按住 Shift 直接停在英文单词上（in_context）。
+    entry 是 jp_dict.EnglishWord，查不到时为 None。header_bottom 之上点击读这个英文单词。"""
 
-    def __init__(self, entry, clicked_word, scale=1.0, ai=None, dictionary_ready=True):
+    def __init__(self, entry, clicked_word, scale=1.0, ai=None, dictionary_ready=True, in_context=False):
         super().__init__(entry, scale, ai or {"state": "off", "text": ""})
         self.word_text = entry.word if entry else clicked_word
         self.dictionary_ready = dictionary_ready
+        self.in_context = in_context  # AI 结合原文句子解释，而不是结合日语释义
 
     def render(self):
         px, e = self.px, self.word
@@ -578,10 +579,13 @@ class EnglishCard(Card):
             ops.append(draw_forms)
             y += 18 * len(form_lines) + 6
 
-        # AI：这个英文单词在那条日语释义里的意思（手动点了才请求）
+        # AI：这个英文单词在原文句子里的意思；从日语卡片点进来时是在那条日语释义里的意思（手动点了才请求）
         from jp_ai import parse
         fields = parse(self.ai["text"]) if self.ai["state"] in ("streaming", "done") else {}
-        y = self._layout_ai(ops, y + 4, fields, ("意思", "整条"), "它在这条释义里是什么意思")
+        if self.in_context:
+            y = self._layout_ai(ops, y + 4, fields, ("意思", "翻译"))
+        else:
+            y = self._layout_ai(ops, y + 4, fields, ("意思", "整条"), "它在这条释义里是什么意思")
 
         hint_y = y
         ops.append(lambda d, oy: d.text((px(PAD), oy + px(hint_y)), "点单词读发音 · Esc 或移开鼠标关闭",
